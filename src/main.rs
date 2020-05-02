@@ -7,14 +7,17 @@ use futures::executor;
 fn main() {
     println!("Hello WGPU");
 
+    // Eventloop and Window
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new()
         .build(&event_loop)
         .unwrap();
     let mut size = window.inner_size();
 
+    // Surface
     let surface = wgpu::Surface::create(&window);
 
+    // Adapter
     let adapter_options = &wgpu::RequestAdapterOptions{
         power_preference: wgpu::PowerPreference::Default,
         compatible_surface: Some(&surface),
@@ -30,6 +33,7 @@ fn main() {
             },
             limits: Default::default(),
         };
+    // Device
     let device_future = adapter.request_device(device_descriptor);
     let (device, queue) = executor::block_on(device_future);
     let mut sc_desc = wgpu::SwapChainDescriptor{
@@ -39,9 +43,10 @@ fn main() {
         height: size.height,
         present_mode: wgpu::PresentMode::Fifo,
     };
+    // Swapchain
     let mut swap_chain = device.create_swap_chain(&surface, &sc_desc);
 
-    // Load shaders
+    // Shaders
     let vs_src = include_str!("../shaders/triangle.vert");
     let vs_spirv = glsl_to_spirv::compile(vs_src, glsl_to_spirv::ShaderType::Vertex).unwrap();
     let vs_data = wgpu::read_spirv(vs_spirv).unwrap();
@@ -52,6 +57,7 @@ fn main() {
     let fs_data = wgpu::read_spirv(fs_spirv).unwrap();
     let fs_module = device.create_shader_module(&fs_data);
 
+    // Pipeline
     let render_pipeline_layout = device.create_pipeline_layout(
         &wgpu::PipelineLayoutDescriptor{bind_group_layouts: &[]}
     );
@@ -92,6 +98,7 @@ fn main() {
             alpha_to_coverage_enabled: false,
                 });
 
+    // MAIN EVENT LOOP
     event_loop.run(move |event, _src_window, control_flow| {
         *control_flow = ControlFlow::Poll;
         match event {
