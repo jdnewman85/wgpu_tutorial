@@ -1672,6 +1672,7 @@ dependencies = [
 name = "wgpu_triangles"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "futures",
  "glsl-to-spirv",
  "image",

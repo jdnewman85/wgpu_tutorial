@@ -4,6 +4,44 @@ use winit::window::{WindowBuilder};
 
 use futures::executor;
 
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+struct Vertex {
+    position: [f32; 3],
+    color: [f32; 3],
+}
+
+const VERTICES: &[Vertex] = &[
+    Vertex { position: [0.0, 0.5, 0.0], color: [1.0, 0.0, 0.0] },
+    Vertex { position: [-0.5, -0.5, 0.0], color: [0.0, 1.0, 0.0] },
+    Vertex { position: [0.5, -0.5, 0.0], color: [0.0, 0.0, 1.0] },
+];
+
+unsafe impl bytemuck::Pod for Vertex{}
+unsafe impl bytemuck::Zeroable for Vertex{}
+
+impl Vertex {
+    fn desc<'a>() -> wgpu::VertexBufferDescriptor<'a> {
+        use std::mem;
+        wgpu::VertexBufferDescriptor{
+            stride: mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            step_mode: wgpu::InputStepMode::Vertex,
+            attributes: &[
+                wgpu::VertexAttributeDescriptor{
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float3,
+                },
+                wgpu::VertexAttributeDescriptor{
+                    offset: mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float3,
+                },
+            ]
+        }
+    }
+}
+
 fn main() {
     println!("Hello WGPU");
 
@@ -33,7 +71,7 @@ fn main() {
             },
             limits: Default::default(),
         };
-    // Device
+    // Device and Queue
     let device_future = adapter.request_device(device_descriptor);
     let (device, queue) = executor::block_on(device_future);
     let mut sc_desc = wgpu::SwapChainDescriptor{
@@ -91,12 +129,21 @@ fn main() {
             depth_stencil_state: None,
             vertex_state: wgpu::VertexStateDescriptor{
                 index_format: wgpu::IndexFormat::Uint16,
-                vertex_buffers: &[],
+                vertex_buffers: &[
+                    Vertex::desc(),
+                ],
             },
             sample_count: 1,
             sample_mask: !0,
             alpha_to_coverage_enabled: false,
-                });
+        },
+    );
+
+    let vertex_buffer = device.create_buffer_with_data(
+        bytemuck::cast_slice(VERTICES),
+        wgpu::BufferUsage::VERTEX,
+    );
+
 
     // MAIN EVENT LOOP
     event_loop.run(move |event, _src_window, control_flow| {
@@ -114,6 +161,7 @@ fn main() {
                                 _ => {}
                             }
                         },
+                        // Resize
                         WindowEvent::ScaleFactorChanged{new_inner_size, ..} => {
                             size = **new_inner_size;
                             sc_desc.width = size.width;
@@ -138,6 +186,7 @@ fn main() {
                 );
 
                 {
+                    // Renderpass
                     let mut render_pass = encoder.begin_render_pass(
                         &wgpu::RenderPassDescriptor{
                             color_attachments: &[
@@ -159,7 +208,8 @@ fn main() {
                     );
 
                     render_pass.set_pipeline(&render_pipeline);
-                    render_pass.draw(0..3, 0..1);
+                    render_pass.set_vertex_buffer(0, &vertex_buffer, 0, 0);
+                    render_pass.draw(0..VERTICES.len() as u32, 0..1);
                 } //Stop borrowing encoder
 
 
