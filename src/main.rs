@@ -4,25 +4,32 @@ use winit::window::{WindowBuilder};
 
 use futures::executor;
 
+use lyon::math::{point, Point};
+use lyon::path::Path;
+//use lyon::path::builder::*;
+use lyon::tessellation::*;
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 struct Vertex {
-    position: [f32; 3],
+    position: [f32; 2],
     color: [f32; 3],
 }
 
+/*
 const VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.08682410,  0.49240386, 0.0], color: [0.5, 0.0, 0.5] },
-    Vertex { position: [-0.49513406,  0.06958647, 0.0], color: [0.5, 0.0, 0.5] },
-    Vertex { position: [-0.21918549, -0.44939706, 0.0], color: [0.5, 0.0, 0.5] },
-    Vertex { position: [ 0.35966998, -0.34732910, 0.0], color: [0.5, 0.0, 0.5] },
-    Vertex { position: [ 0.44147372,  0.23473590, 0.0], color: [0.5, 0.0, 0.5] },
+    Vertex { position: [-0.08682410,  0.49240386], color: [0.5, 0.0, 0.5] },
+    Vertex { position: [-0.49513406,  0.06958647], color: [0.5, 0.0, 0.5] },
+    Vertex { position: [-0.21918549, -0.44939706], color: [0.5, 0.0, 0.5] },
+    Vertex { position: [ 0.35966998, -0.34732910], color: [0.5, 0.0, 0.5] },
+    Vertex { position: [ 0.44147372,  0.23473590], color: [0.5, 0.0, 0.5] },
 ];
 const INDICES: &[u16] = &[
     0, 1, 4,
     1, 2, 4,
     2, 3, 4,
 ];
+*/
 
 unsafe impl bytemuck::Pod for Vertex{}
 unsafe impl bytemuck::Zeroable for Vertex{}
@@ -37,10 +44,10 @@ impl Vertex {
                 wgpu::VertexAttributeDescriptor{
                     offset: 0,
                     shader_location: 0,
-                    format: wgpu::VertexFormat::Float3,
+                    format: wgpu::VertexFormat::Float2,
                 },
                 wgpu::VertexAttributeDescriptor{
-                    offset: mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
+                    offset: mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
                     shader_location: 1,
                     format: wgpu::VertexFormat::Float3,
                 },
@@ -118,7 +125,7 @@ fn main() {
                 entry_point: "main",
             }),
             rasterization_state: Some(wgpu::RasterizationStateDescriptor{
-                front_face: wgpu::FrontFace::Ccw,
+                front_face: wgpu::FrontFace::Cw,
                 cull_mode: wgpu::CullMode::Back,
                 depth_bias: 0,
                 depth_bias_slope_scale: 0.0,
@@ -146,6 +153,7 @@ fn main() {
         },
     );
 
+    /*
     let vertex_buffer = device.create_buffer_with_data(
         bytemuck::cast_slice(VERTICES),
         wgpu::BufferUsage::VERTEX,
@@ -156,7 +164,27 @@ fn main() {
         wgpu::BufferUsage::INDEX,
     );
     let num_indices = INDICES.len() as u32;
+    */
 
+    let geometry = build_path();
+    let vertex_data = geometry.vertices;
+    let index_data = geometry.indices;
+    let vertex_buffer = device.create_buffer_with_data(
+        bytemuck::cast_slice(&vertex_data),
+        wgpu::BufferUsage::VERTEX,
+    );
+    let num_vertices = vertex_data.len() as u32;
+    dbg!(num_vertices);
+    dbg!(vertex_data);
+
+    let index_buffer = device.create_buffer_with_data(
+        bytemuck::cast_slice(&index_data),
+        wgpu::BufferUsage::INDEX,
+    );
+    let num_indices = index_data.len() as u32;
+
+    dbg!(num_indices);
+    dbg!(index_data);
 
     // MAIN EVENT LOOP
     event_loop.run(move |event, _src_window, control_flow| {
@@ -209,9 +237,9 @@ fn main() {
                                     load_op: wgpu::LoadOp::Clear,
                                     store_op: wgpu::StoreOp::Store,
                                     clear_color: wgpu::Color {
-                                        r: 0.0,
-                                        g: 0.0,
-                                        b: 0.7,
+                                        r: 0.2,
+                                        g: 0.2,
+                                        b: 0.4,
                                         a: 1.0,
                                     },
                                 }
@@ -233,4 +261,31 @@ fn main() {
             _ => {}
         }
     });
+}
+
+fn build_path() -> VertexBuffers<Vertex, u16> {
+    let mut builder = Path::builder();
+    builder.move_to(point( 0.0,  0.0));
+    builder.line_to(point(-1.0,  0.0));
+    builder.line_to(point(-1.0,  1.0));
+    builder.line_to(point( 1.0,  1.0));
+    builder.close();
+    let path = builder.build();
+
+    let mut geometry: VertexBuffers<Vertex, u16> = VertexBuffers::new();
+    let mut tessellator = FillTessellator::new();
+    {
+        tessellator.tessellate_path(
+            &path,
+            &FillOptions::default(),
+            &mut BuffersBuilder::new(&mut geometry, |pos: Point, _: FillAttributes| {
+                Vertex {
+                    position: pos.to_array(),
+                    color: [0.0, 1.0, 0.0],
+                }
+            }),
+            ).unwrap();
+    }
+
+    return geometry;
 }

@@ -13,3 +13,5 @@ wgpu = "*"
 futures = "*"
 glsl-to-spirv = "*"
 bytemuck = "*"
+
+lyon = "*"
