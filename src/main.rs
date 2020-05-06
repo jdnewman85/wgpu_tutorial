@@ -13,16 +13,16 @@ use lyon::tessellation::*;
 #[derive(Copy, Clone, Debug)]
 struct Vertex {
     position: [f32; 2],
-    color: [f32; 3],
+    tex_coords: [f32; 2],
 }
 
 
 const VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.08682410,  0.49240386], color: [0.5, 0.0, 0.5] },
-    Vertex { position: [-0.49513406,  0.06958647], color: [0.5, 0.0, 0.5] },
-    Vertex { position: [-0.21918549, -0.44939706], color: [0.5, 0.0, 0.5] },
-    Vertex { position: [ 0.35966998, -0.34732910], color: [0.5, 0.0, 0.5] },
-    Vertex { position: [ 0.44147372,  0.23473590], color: [0.5, 0.0, 0.5] },
+    Vertex { position: [-0.08682410,  0.49240386], tex_coords: [0.4131759000, 1.0 - 0.992403860] },
+    Vertex { position: [-0.49513406,  0.06958647], tex_coords: [0.0048659444, 1.0 - 0.569586460] },
+    Vertex { position: [-0.21918549, -0.44939706], tex_coords: [0.2808145300, 1.0 - 0.050602943] },
+    Vertex { position: [ 0.35966998, -0.34732910], tex_coords: [0.8596700000, 1.0 - 0.152670890] },
+    Vertex { position: [ 0.44147372,  0.23473590], tex_coords: [0.9414737000, 1.0 - 0.734735900] },
 ];
 const INDICES: &[u16] = &[
     0, 1, 4,
@@ -49,7 +49,7 @@ impl Vertex {
                 wgpu::VertexAttributeDescriptor{
                     offset: mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
                     shader_location: 1,
-                    format: wgpu::VertexFormat::Float3,
+                    format: wgpu::VertexFormat::Float2,
                 },
             ]
         }
@@ -87,7 +87,7 @@ fn main() {
         };
     // Device and Queue
     let device_future = adapter.request_device(device_descriptor);
-    let (device, queue) = executor::block_on(device_future);
+    let (device, mut queue) = executor::block_on(device_future);
     let mut sc_desc = wgpu::SwapChainDescriptor{
         usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
         format: wgpu::TextureFormat::Bgra8UnormSrgb,
@@ -97,6 +97,120 @@ fn main() {
     };
     // Swapchain
     let mut swap_chain = device.create_swap_chain(&surface, &sc_desc);
+
+    // Load textures
+    // *
+    let diffuse_bytes = include_bytes!("../media/happy-tree.png");
+    let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
+    let diffuse_rgba = diffuse_image.as_rgba8().unwrap();
+    use image::GenericImageView;
+    let dimensions = diffuse_image.dimensions();
+
+    let diffuse_size = wgpu::Extent3d{
+        width: dimensions.0,
+        height: dimensions.1,
+        depth: 1,
+    };
+    let diffuse_texture = device.create_texture(
+        &wgpu::TextureDescriptor{
+            label: Some("diffuse_texture"),
+            size: wgpu::Extent3d{
+                width: dimensions.0,
+                height: dimensions.1,
+                depth: 1,
+            },
+            array_layer_count: 1,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
+        }
+    );
+    let diffuse_buffer = device.create_buffer_with_data(
+        &diffuse_rgba,
+        wgpu::BufferUsage::COPY_SRC,
+     );
+
+    let mut encoder = device.create_command_encoder(
+        &wgpu::CommandEncoderDescriptor{
+            label: Some("texture_buffer_copy_encoder"),
+        }
+    );
+    encoder.copy_buffer_to_texture(
+        wgpu::BufferCopyView{
+            buffer: &diffuse_buffer,
+            offset: 0,
+            bytes_per_row: 4 * dimensions.0,
+            rows_per_image: dimensions.1,
+        },
+        wgpu::TextureCopyView{
+            texture: &diffuse_texture,
+            mip_level: 0,
+            array_layer: 0,
+            origin: wgpu::Origin3d::ZERO,
+        },
+        diffuse_size,
+    );
+    queue.submit(&[encoder.finish()]);
+
+    let diffuse_texture_view = diffuse_texture.create_default_view();
+    let diffuse_sampler = device.create_sampler(
+        &wgpu::SamplerDescriptor{
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::FilterMode::Nearest,
+            lod_min_clamp: -100.0,
+            lod_max_clamp: 100.0,
+            compare: wgpu::CompareFunction::Always,
+        }
+    );
+
+    let texture_bind_group_layout = device.create_bind_group_layout(
+        &wgpu::BindGroupLayoutDescriptor{
+            label: Some("texture_bind_group_layout"),
+            bindings: &[
+                wgpu::BindGroupLayoutEntry{
+                    binding: 0,
+                    visibility: wgpu::ShaderStage::FRAGMENT,
+                    ty: wgpu::BindingType::SampledTexture{
+                        multisampled: false,
+                        dimension: wgpu::TextureViewDimension::D2,
+                        component_type: wgpu::TextureComponentType::Uint,
+                    },
+                },
+                wgpu::BindGroupLayoutEntry{
+                    binding: 1,
+                    visibility: wgpu::ShaderStage::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler{
+                        comparison: false,
+                    },
+                },
+            ],
+        }
+    );
+
+    //*
+    let diffuse_bind_group = device.create_bind_group(
+        &wgpu::BindGroupDescriptor{
+            label: Some("diffuse_bind_group"),
+            layout: &texture_bind_group_layout,
+            bindings: &[
+                wgpu::Binding{
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&diffuse_texture_view),
+                },
+                wgpu::Binding{
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&diffuse_sampler),
+                }
+            ],
+        }
+    );
+
 
     // Shaders
     let vs_src = include_str!("../shaders/triangle.vert");
@@ -111,7 +225,9 @@ fn main() {
 
     // Pipeline
     let render_pipeline_layout = device.create_pipeline_layout(
-        &wgpu::PipelineLayoutDescriptor{bind_group_layouts: &[]}
+        &wgpu::PipelineLayoutDescriptor{bind_group_layouts: &[
+            &texture_bind_group_layout,
+        ]}
     );
     let render_pipeline = device.create_render_pipeline(
         &wgpu::RenderPipelineDescriptor{
@@ -250,6 +366,7 @@ fn main() {
                         }
                     );
 
+                    render_pass.set_bind_group(0, &diffuse_bind_group, &[]);
                     render_pass.set_pipeline(&render_pipeline);
                     render_pass.set_vertex_buffer(0, &vertex_buffer, 0, 0);
                     render_pass.set_index_buffer(&index_buffer, 0, 0);
@@ -283,7 +400,7 @@ fn build_path() -> VertexBuffers<Vertex, u16> {
             &mut BuffersBuilder::new(&mut geometry, |pos: Point, _: FillAttributes| {
                 Vertex {
                     position: pos.to_array(),
-                    color: [0.0, 1.0, 0.0],
+                    tex_coords: [0.0, 1.0],
                 }
             }),
             ).unwrap();
