@@ -16,7 +16,7 @@ struct Vertex {
     color: [f32; 3],
 }
 
-/*
+
 const VERTICES: &[Vertex] = &[
     Vertex { position: [-0.08682410,  0.49240386], color: [0.5, 0.0, 0.5] },
     Vertex { position: [-0.49513406,  0.06958647], color: [0.5, 0.0, 0.5] },
@@ -29,7 +29,7 @@ const INDICES: &[u16] = &[
     1, 2, 4,
     2, 3, 4,
 ];
-*/
+
 
 unsafe impl bytemuck::Pod for Vertex{}
 unsafe impl bytemuck::Zeroable for Vertex{}
@@ -125,7 +125,7 @@ fn main() {
                 entry_point: "main",
             }),
             rasterization_state: Some(wgpu::RasterizationStateDescriptor{
-                front_face: wgpu::FrontFace::Cw,
+                front_face: wgpu::FrontFace::Ccw,
                 cull_mode: wgpu::CullMode::Back,
                 depth_bias: 0,
                 depth_bias_slope_scale: 0.0,
@@ -153,7 +153,7 @@ fn main() {
         },
     );
 
-    /*
+    ///*
     let vertex_buffer = device.create_buffer_with_data(
         bytemuck::cast_slice(VERTICES),
         wgpu::BufferUsage::VERTEX,
@@ -164,8 +164,9 @@ fn main() {
         wgpu::BufferUsage::INDEX,
     );
     let num_indices = INDICES.len() as u32;
-    */
-
+    //*/
+    //
+    /*
     let geometry = build_path();
     let vertex_data = geometry.vertices;
     let index_data = geometry.indices;
@@ -185,6 +186,7 @@ fn main() {
 
     dbg!(num_indices);
     dbg!(index_data);
+    */
 
     // MAIN EVENT LOOP
     event_loop.run(move |event, _src_window, control_flow| {
