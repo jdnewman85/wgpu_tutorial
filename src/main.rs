@@ -269,7 +269,7 @@ fn main() {
         },
     );
 
-    ///*
+    // /*
     let vertex_buffer = device.create_buffer_with_data(
         bytemuck::cast_slice(VERTICES),
         wgpu::BufferUsage::VERTEX,
