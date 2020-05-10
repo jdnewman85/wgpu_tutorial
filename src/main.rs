@@ -4,10 +4,7 @@ use winit::window::{WindowBuilder};
 
 use futures::executor;
 
-use lyon::math::{point, Point};
-use lyon::path::Path;
-//use lyon::path::builder::*;
-use lyon::tessellation::*;
+use env_logger;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
@@ -58,6 +55,7 @@ impl Vertex {
 
 fn main() {
     println!("Hello WGPU");
+    env_logger::init();
 
     // Eventloop and Window
     let event_loop = EventLoop::new();
@@ -76,7 +74,7 @@ fn main() {
     };
     let adapter_future = wgpu::Adapter::request( 
         adapter_options,
-        wgpu::BackendBit::PRIMARY,
+        wgpu::BackendBit::VULKAN,
     );
     let adapter = executor::block_on(adapter_future).unwrap();
     let device_descriptor = &wgpu::DeviceDescriptor{
@@ -280,29 +278,6 @@ fn main() {
         wgpu::BufferUsage::INDEX,
     );
     let num_indices = INDICES.len() as u32;
-    //*/
-    //
-    /*
-    let geometry = build_path();
-    let vertex_data = geometry.vertices;
-    let index_data = geometry.indices;
-    let vertex_buffer = device.create_buffer_with_data(
-        bytemuck::cast_slice(&vertex_data),
-        wgpu::BufferUsage::VERTEX,
-    );
-    let num_vertices = vertex_data.len() as u32;
-    dbg!(num_vertices);
-    dbg!(vertex_data);
-
-    let index_buffer = device.create_buffer_with_data(
-        bytemuck::cast_slice(&index_data),
-        wgpu::BufferUsage::INDEX,
-    );
-    let num_indices = index_data.len() as u32;
-
-    dbg!(num_indices);
-    dbg!(index_data);
-    */
 
     // MAIN EVENT LOOP
     event_loop.run(move |event, _src_window, control_flow| {
@@ -371,8 +346,7 @@ fn main() {
                     render_pass.set_vertex_buffer(0, &vertex_buffer, 0, 0);
                     render_pass.set_index_buffer(&index_buffer, 0, 0);
                     render_pass.draw_indexed(0..num_indices, 0, 0..1);
-                } //Stop borrowing encoder
-
+                }
 
                 queue.submit(&[ encoder.finish(), ]);
             },
@@ -382,29 +356,3 @@ fn main() {
     });
 }
 
-fn build_path() -> VertexBuffers<Vertex, u16> {
-    let mut builder = Path::builder();
-    builder.move_to(point( 0.0,  0.0));
-    builder.line_to(point(-1.0,  0.0));
-    builder.line_to(point(-1.0,  1.0));
-    builder.line_to(point( 1.0,  1.0));
-    builder.close();
-    let path = builder.build();
-
-    let mut geometry: VertexBuffers<Vertex, u16> = VertexBuffers::new();
-    let mut tessellator = FillTessellator::new();
-    {
-        tessellator.tessellate_path(
-            &path,
-            &FillOptions::default(),
-            &mut BuffersBuilder::new(&mut geometry, |pos: Point, _: FillAttributes| {
-                Vertex {
-                    position: pos.to_array(),
-                    tex_coords: [0.0, 1.0],
-                }
-            }),
-            ).unwrap();
-    }
-
-    return geometry;
-}
