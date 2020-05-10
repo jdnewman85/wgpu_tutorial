@@ -268,9 +268,9 @@ fn main() {
 
     // Pipelines
     let compute_pipeline_layout = device.create_pipeline_layout(
-        &wgpu::PipelineLayoutDescriptor{
-            bind_group_layouts: &[&compute_bind_group_layout]
-        }
+        &wgpu::PipelineLayoutDescriptor{bind_group_layouts: &[
+            &compute_bind_group_layout,
+        ]}
     );
     let compute_pipeline = device.create_compute_pipeline(
         &wgpu::ComputePipelineDescriptor{
