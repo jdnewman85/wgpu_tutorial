@@ -85,7 +85,48 @@ fn main() {
         };
     // Device and Queue
     let device_future = adapter.request_device(device_descriptor);
-    let (device, mut queue) = executor::block_on(device_future);
+    let (device, queue) = executor::block_on(device_future);
+
+    // StorageBuffer
+    let vertices_bytes:&[u8] = bytemuck::cast_slice(VERTICES);
+    let storage_buffer = device.create_buffer(
+        &wgpu::BufferDescriptor{
+            size: vertices_bytes.len() as u64, //TODO
+            usage: wgpu::BufferUsage::STORAGE |
+                wgpu::BufferUsage::COPY_DST |
+                wgpu::BufferUsage::COPY_SRC,
+            label: None,
+        }
+    );
+
+    let compute_bind_group_layout = device.create_bind_group_layout(
+        &wgpu::BindGroupLayoutDescriptor{
+            bindings: &[wgpu::BindGroupLayoutEntry{
+                binding: 0,
+                visibility: wgpu::ShaderStage::COMPUTE, //TODO
+                ty: wgpu::BindingType::StorageBuffer{
+                    dynamic: false,
+                    readonly: false,
+                },
+            }],
+            label: None,
+        }
+    );
+    let compute_bind_group = device.create_bind_group(
+        &wgpu::BindGroupDescriptor{
+            label: None,
+            layout: &compute_bind_group_layout,
+            bindings: &[wgpu::Binding{
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer{
+                    buffer: &storage_buffer, //TODO
+                    range: 0..vertices_bytes.len() as u64, //TODO
+                },
+            }],
+        },
+    );
+
+
     let mut sc_desc = wgpu::SwapChainDescriptor{
         usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
         format: wgpu::TextureFormat::Bgra8UnormSrgb,
@@ -93,11 +134,9 @@ fn main() {
         height: size.height,
         present_mode: wgpu::PresentMode::Fifo,
     };
-    // Swapchain
     let mut swap_chain = device.create_swap_chain(&surface, &sc_desc);
 
-    // Load textures
-    // *
+    //>>>> Load textures
     let diffuse_bytes = include_bytes!("../media/happy-tree.png");
     let diffuse_image = image::load_from_memory(diffuse_bytes).unwrap();
     let diffuse_rgba = diffuse_image.as_rgba8().unwrap();
@@ -190,6 +229,7 @@ fn main() {
             ],
         }
     );
+    //<<<< Load textures
 
     //*
     let diffuse_bind_group = device.create_bind_group(
@@ -211,6 +251,11 @@ fn main() {
 
 
     // Shaders
+    let cs_src = include_str!("../shaders/triangle.comp");
+    let cs_spirv = glsl_to_spirv::compile(cs_src, glsl_to_spirv::ShaderType::Compute).unwrap();
+    let cs_data = wgpu::read_spirv(cs_spirv).unwrap();
+    let cs_module = device.create_shader_module(&cs_data);
+
     let vs_src = include_str!("../shaders/triangle.vert");
     let vs_spirv = glsl_to_spirv::compile(vs_src, glsl_to_spirv::ShaderType::Vertex).unwrap();
     let vs_data = wgpu::read_spirv(vs_spirv).unwrap();
@@ -221,7 +266,22 @@ fn main() {
     let fs_data = wgpu::read_spirv(fs_spirv).unwrap();
     let fs_module = device.create_shader_module(&fs_data);
 
-    // Pipeline
+    // Pipelines
+    let compute_pipeline_layout = device.create_pipeline_layout(
+        &wgpu::PipelineLayoutDescriptor{
+            bind_group_layouts: &[&compute_bind_group_layout]
+        }
+    );
+    let compute_pipeline = device.create_compute_pipeline(
+        &wgpu::ComputePipelineDescriptor{
+            layout: &compute_pipeline_layout,
+            compute_stage: wgpu::ProgrammableStageDescriptor{
+                module: &cs_module,
+                entry_point: "main",
+            },
+        },
+    );
+
     let render_pipeline_layout = device.create_pipeline_layout(
         &wgpu::PipelineLayoutDescriptor{bind_group_layouts: &[
             &texture_bind_group_layout,
@@ -267,6 +327,7 @@ fn main() {
         },
     );
 
+    // Buffers
     // /*
     let vertex_buffer = device.create_buffer_with_data(
         bytemuck::cast_slice(VERTICES),
@@ -318,6 +379,14 @@ fn main() {
                         label: Some("Render Encoder"),
                     }
                 );
+
+                {
+                    // Compute
+                    let mut compute_pass = encoder.begin_compute_pass();
+                    compute_pass.set_pipeline(&compute_pipeline);
+                    compute_pass.set_bind_group(0, &compute_bind_group, &[]);
+                    compute_pass.dispatch(vertices_bytes.len() as u32, 1, 1); //TODO
+                }
 
                 {
                     // Renderpass

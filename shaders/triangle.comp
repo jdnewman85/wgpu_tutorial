@@ -1,0 +1,37 @@
+#version 450
+layout(local_size_x = 1) in;
+
+layout(set = 0, binding = 0) buffer Verts {
+    vec2 position;
+	vec2 uv;
+};
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+	switch(index) {
+		case 0:
+			position = vec2(-0.08682410,  0.49240386);
+			uv = vec2(0.4131759000, 1.0 - 0.992403860);
+			break;
+		case 1:
+			position = vec2(-0.49513406,  0.06958647);
+			uv = vec2(0.0048659444, 1.0 - 0.569586460);
+			break;
+		case 2:
+			position = vec2(-0.21918549, -0.44939706);
+			uv = vec2(0.2808145300, 1.0 - 0.050602943);
+			break;
+		case 3:
+			position = vec2( 0.35966998, -0.34732910);
+			uv = vec2(0.8596700000, 1.0 - 0.152670890);
+			break;
+		case 4:
+			position = vec2( 0.44147372,  0.23473590);
+			uv = vec2(0.9414737000, 1.0 - 0.734735900);
+			break;
+		default:
+			position = vec2(0.0, 0.0);
+			uv = vec2(0.0, 0.0);
+	}
+    //position[index] = position[index];
+}
