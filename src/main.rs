@@ -343,6 +343,7 @@ fn main() {
     // /*
     let vertex_buffer = device.create_buffer_with_data(
         bytemuck::cast_slice(VERTICES),
+        wgpu::BufferUsage::COPY_DST |
         wgpu::BufferUsage::VERTEX,
     );
 
@@ -401,6 +402,7 @@ fn main() {
                     compute_pass.dispatch(VERTICES.len() as u32, 1, 1); //TODO
                 }
                 encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, vertex_buffer_size);
+                encoder.copy_buffer_to_buffer(&storage_buffer, 0, &vertex_buffer, 0, vertex_buffer_size);
 
                 {
                     // Renderpass
@@ -433,6 +435,7 @@ fn main() {
 
                 queue.submit(&[ encoder.finish(), ]);
 
+                /*
                 // Map Test
                 let map_future = staging_buffer.map_read(0, vertex_buffer_size);
                 device.poll(wgpu::Maintain::Wait);
@@ -449,9 +452,10 @@ fn main() {
                 for (i, f) in mapping.iter().enumerate() {
                     println!("mapping[{}] = {}", i, f);
                 }
+                */
 
 
-                *control_flow = ControlFlow::Exit //TEMP
+//                *control_flow = ControlFlow::Exit //TEMP
 
             },
             Event::MainEventsCleared => { window.request_redraw(); },
