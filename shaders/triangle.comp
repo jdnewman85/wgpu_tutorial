@@ -1,13 +1,20 @@
 #version 450
 layout(local_size_x = 1) in;
-
-layout(set = 0, binding = 0) buffer Verts {
+struct myVert {
     vec2 position;
 	vec2 uv;
+};
+layout(set = 0, binding = 0) buffer Verts {
+	myVert[] verts;
 };
 
 void main() {
     uint index = gl_GlobalInvocationID.x;
+
+	//verts[index].position = vec2(69.0, 0.69);
+	//verts[index].uv = vec2(169.0, 1.69);
+	
+	vec2 position, uv;
 	switch(index) {
 		case 0:
 			position = vec2(-0.08682410,  0.49240386);
@@ -33,5 +40,7 @@ void main() {
 			position = vec2(0.0, 0.0);
 			uv = vec2(0.0, 0.0);
 	}
-    //position[index] = position[index];
+
+	verts[index].position = position;
+	verts[index].uv = uv;
 }

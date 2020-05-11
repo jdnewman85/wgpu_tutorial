@@ -6,6 +6,8 @@ use futures::executor;
 
 use env_logger;
 
+use std::convert::TryInto;
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 struct Vertex {
@@ -89,10 +91,20 @@ fn main() {
 
     // StorageBuffer
     let vertices_bytes:&[u8] = bytemuck::cast_slice(VERTICES);
+    let vertex_buffer_size = vertices_bytes.len() as wgpu::BufferAddress;
+
+    let staging_buffer = device.create_buffer_with_data(
+        bytemuck::cast_slice(&VERTICES),
+        wgpu::BufferUsage::MAP_READ |
+        wgpu::BufferUsage::COPY_DST |
+        wgpu::BufferUsage::COPY_SRC,
+    );
+
     let storage_buffer = device.create_buffer(
         &wgpu::BufferDescriptor{
-            size: vertices_bytes.len() as u64, //TODO
-            usage: wgpu::BufferUsage::STORAGE |
+            size: vertex_buffer_size, //TODO
+            usage: wgpu::BufferUsage::STORAGE | //TODO
+                //wgpu::BufferUsage::VERTEX |
                 wgpu::BufferUsage::COPY_DST |
                 wgpu::BufferUsage::COPY_SRC,
             label: None,
@@ -120,7 +132,7 @@ fn main() {
                 binding: 0,
                 resource: wgpu::BindingResource::Buffer{
                     buffer: &storage_buffer, //TODO
-                    range: 0..vertices_bytes.len() as u64, //TODO
+                    range: 0..vertex_buffer_size, //TODO
                 },
             }],
         },
@@ -380,13 +392,15 @@ fn main() {
                     }
                 );
 
+                encoder.copy_buffer_to_buffer(&staging_buffer, 0, &storage_buffer, 0, vertex_buffer_size);
                 {
                     // Compute
                     let mut compute_pass = encoder.begin_compute_pass();
                     compute_pass.set_pipeline(&compute_pipeline);
                     compute_pass.set_bind_group(0, &compute_bind_group, &[]);
-                    compute_pass.dispatch(vertices_bytes.len() as u32, 1, 1); //TODO
+                    compute_pass.dispatch(VERTICES.len() as u32, 1, 1); //TODO
                 }
+                encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, vertex_buffer_size);
 
                 {
                     // Renderpass
@@ -418,6 +432,27 @@ fn main() {
                 }
 
                 queue.submit(&[ encoder.finish(), ]);
+
+                // Map Test
+                let map_future = staging_buffer.map_read(0, vertex_buffer_size);
+                device.poll(wgpu::Maintain::Wait);
+                let mapping:Vec<f32> = executor::block_on(map_future).unwrap()
+                    .as_slice()
+                    .chunks_exact(4)
+                    .map(|b| {
+                        f32::from_bits(
+                            u32::from_ne_bytes(b.try_into().unwrap())
+                        )
+                    })
+                    .collect();
+
+                for (i, f) in mapping.iter().enumerate() {
+                    println!("mapping[{}] = {}", i, f);
+                }
+
+
+                *control_flow = ControlFlow::Exit //TEMP
+
             },
             Event::MainEventsCleared => { window.request_redraw(); },
             _ => {}
